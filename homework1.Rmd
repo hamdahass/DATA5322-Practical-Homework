@@ -1,0 +1,150 @@
+---
+title: "Worksheet 1: Decision Trees"
+author: "Hamda Hassan"
+date: "Due 2026-04-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Load packages
+```{r}
+library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(randomForest)
+library(gbm)
+
+set.seed(123)
+```
+
+
+2. Load data
+```{r}
+load("youth_data.Rdata")
+data <- df
+```
+
+
+3. Outcomes
+```{r}
+# Binary outcome (FOR TREE + RF)
+data$mj_binary_factor <- ifelse(data$MRJFLAG == 1, "Yes", "No")
+data$mj_binary_factor <- as.factor(data$mj_binary_factor)
+
+# Binary outcome (FOR GBM)
+data$mj_binary_num <- ifelse(data$MRJFLAG == 1, 1, 0)
+data$mj_binary_num <- as.numeric(data$mj_binary_num)
+
+# Regression outcome
+data$mj_days <- data$MRJYDAYS
+```
+
+4. Predictors
+```{r}
+predictors <- c(
+  "IRSEX", "NEWRACE2", "INCOME", "POVERTY3",
+  "IMOTHER", "IFATHER", "PARCHKHW", "PARHLPHW",
+  "FRDMEVR2", "FRDMJMON", "PRMJEVR2",
+  "TALKPROB", "PREVIOL2", "ANYEDUC3"
+)
+
+```
+
+
+5. Model dataset
+```{r}
+# Dataset for TREE + RANDOM FOREST
+model_data_class <- data[, c(
+  predictors,
+  "mj_binary_factor"
+)]
+
+# Dataset for GBM
+model_data_gbm <- data[, c(
+  predictors,
+  "mj_binary_num"
+)]
+```
+
+
+data cleaning
+```{r}
+model_data_class <- na.omit(model_data_class)
+model_data_gbm   <- na.omit(model_data_gbm)
+```
+
+6. Train/Test split
+```{r}
+# Classification split
+index_class <- createDataPartition(model_data_class$mj_binary_factor,
+                                   p = 0.7,
+                                   list = FALSE)
+
+train_class <- model_data_class[index_class, ]
+test_class  <- model_data_class[-index_class, ]
+
+
+# GBM split
+index_gbm <- createDataPartition(model_data_gbm$mj_binary_num,
+                                 p = 0.7,
+                                 list = FALSE)
+
+train_gbm <- model_data_gbm[index_gbm, ]
+test_gbm  <- model_data_gbm[-index_gbm, ]
+
+```
+
+
+7. Decision tree
+```{r}
+tree1 <- rpart(mj_binary_factor ~ .,
+               data = train_class,
+               method = "class")
+
+rpart.plot(tree1)
+```
+
+
+8. Random Forest
+```{r}
+rf1 <- randomForest(mj_binary_factor ~ .,
+                    data = train_class,
+                    ntree = 300,
+                    importance = TRUE)
+
+varImpPlot(rf1)
+```
+
+
+9. Boosting (GMB)
+```{r}
+boost1 <- gbm(mj_binary_num ~ .,
+              data = train_gbm,
+              distribution = "bernoulli",
+              n.trees = 500,
+              interaction.depth = 3,
+              shrinkage = 0.01)
+
+summary(boost1)
+```
+
+
+
+10. Evaluation (Random Forest)
+```{r}
+pred <- predict(rf1, test_class, type = "class")
+
+confusionMatrix(pred, test_class$mj_binary_factor)
+
+```
+
+Check for NAs
+```{r}
+colSums(is.na(model_data_class))
+colSums(is.na(model_data_gbm))
+```
+
